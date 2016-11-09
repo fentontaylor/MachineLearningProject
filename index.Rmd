@@ -1,0 +1,18 @@
+---
+title: Practical Machine Learning
+subtitle: Using accelerometer data to predict weight lifting
+  execution
+author: "Fenton Taylor"
+date: "November 9, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
+```
+
+```{r downloadfiles}
+train.file <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+test.file <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+```
+
