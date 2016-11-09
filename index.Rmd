@@ -4,7 +4,9 @@ subtitle: Using accelerometer data to predict weight lifting
   execution
 author: "Fenton Taylor"
 date: "November 9, 2016"
-output: html_document
+output: 
+  html_document: 
+    keep_md: yes
 ---
 
 ```{r setup, include=FALSE}
