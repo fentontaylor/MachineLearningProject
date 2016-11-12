@@ -13,8 +13,193 @@ output:
 knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
 ```
 
-```{r downloadfiles}
-train.file <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
-test.file <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+##__I. Introduction__
+The purpose of this exercise is to find a prediction model, using machine learning algorithms,
+to perform qualitative activity recognition. The data comes from Velloso, et al.'s publication entitled "Qualitative Activity Recognition of Weight Lifting Exercises" as part of their Human Activity Recognition research. Their publications and datasets are free and open to the public and can be found at the following link: [Read more here.](http://groupware.les.inf.puc-rio.br/har#ixzz4PXRAjZK1)
+
+In this particular study, as described on the author's website, "six young health participants were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in five different fashions: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E)." Participants were fitted with four accelerometer devices to measure kinetic movement. The devices were located on a waist belt, an upper arm band, a glove, and a dumbbell.
+
+##__II. Getting and Cleaning the Data__
+###__A. Load Libraries__
+
+```{r env, message=FALSE}
+library(caret)
+library(rattle)
+library(corrplot)
 ```
 
+###__B. Download Files__
+```{r downloadfiles}
+if(!file.exists("pml-training.csv")){
+      download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv",
+                    destfile = "pml-training.csv")
+}
+
+if(!file.exists("pml-testing.csv")){
+      download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv",
+                    destfile = "pml-testing.csv")
+}
+
+training <- read.csv("pml-training.csv", na.strings = c("", NA))
+testing <- read.csv("pml-testing.csv", na.strings = c("", NA))
+```
+
+###__C. Transforming the Data__
+The data needs to be cleaned so that the variables are all relevant predictors and the machine learning algorithms can process them more efficiently. Both the original training and testing datasets receive the following transformations:
+
+1. Randomly sort the training data so that k-fold cross-validation can be used.
+2. Remove any columns with more that 75% NA values.
+3. Remove the first 7 columns that contain meta-data about the testing subject and measurements. These variables are not relevant to the prediction.
+
+Finally, using random subsampling, the original training set needs to be split into smaller training and testing sets (60% and 40%, respectively) to build and test the accuracy of the models.
+
+```{r subsetting}
+# Transformation 1
+myTrain <- training[sample(1:nrow(training)),]
+
+# Transformation 2
+myTrain <- myTrain[, colSums(is.na(training)) < nrow(training) * 0.75]
+myTest <- testing[, colSums(is.na(testing)) < nrow(testing) * 0.75]
+
+# Transformation 3
+myTrain <- myTrain[, -c(1:7)]
+myTest <- myTest[, -c(1:7)]
+
+set.seed(432)
+inTrain <- createDataPartition(y=myTrain$classe, p=0.6, list=FALSE)
+tra <- myTrain[inTrain,]
+tes <- myTrain[-inTrain,]
+```
+
+##__III. Exploratory Analysis__
+The data needs to be checked to see if any further transformation is necessary before attempting to build models with it.
+###__A. Basic__
+Dimensions of the training and testing set made from the training set:
+```{r}
+dim(tra); dim(tes)
+```
+
+Check if there are any NA values left in the traing or test set that need to be imputed. TRUE = no NA.
+```{r}
+all(colSums(is.na(tra))==0); all(colSums(is.na(tes))==0)
+```
+
+Check to see if any variables have near zero variance. If FALSE, then there are no variables with near zero variance.
+```{r}
+
+any(nearZeroVar(tra, saveMetrics = TRUE)$nzv)
+
+```
+
+###__B. Correlation Analysis__
+
+```{r correlation, fig.align="center", fig.height=9, fig.width=9}
+corrs <- cor(tra[,-53])
+corrplot(corrs, method="color", order="original", type="lower", tl.cex = 0.8, tl.col="grey20")
+```
+
+There appear to be several variables that are highly correlated (the dark squares in the plot), but the majority of the correlations do not appear to be a cause for concern. Therefore, the variables will remain unaltered for the initial model building.
+
+The remaining variables should now be only measurements collected from the devices (with no NA values) and the class of the exercise performed. The data is now ready to build and test models on.
+
+##__IV. Model Building__
+All models will use k-fold cross-validation with $k=5$. 
+
+###__Method 1: Classification Tree__
+```{r classTree, cache=TRUE, fig.align="center"}
+set.seed(111)
+system.time(mod.ct <- train(x=tra[,-53], y=tra$classe, method="rpart",
+                trControl=trainControl(method="cv", number=5)))
+```
+
+```{r ct2}
+mod.ct$finalModel
+# Use model to predict classe in testing set
+pred.ct <- predict(mod.ct, newdata=tes)
+
+fancyRpartPlot(mod.ct$finalModel, main = "Classification Tree Using All Variables")
+cm.ct <- confusionMatrix(pred.ct, tes$classe)
+
+# Table of predicted vs. actual exercise classes
+cm.ct$table
+# Overall accuracy statistics
+round(cm.ct$overall, 3)
+```
+
+####__Analysis__
+The simple classification tree with all the measurement variables as predictors obtains only `r round(cm.ct$overall[[1]],3)*100`% out of sample accuracy when applied to the testing set. That is quite poor predictive power, so other algorithms need to be explored.
+
+###__Method 2: Random Forests__
+
+```{r randomForest, cache=TRUE}
+set.seed(222)
+system.time(mod.rf <- train(x=tra[,-53], y=tra$classe, method="rf",
+                trControl=trainControl(method="cv", number=5)))
+```
+
+```{r rf2}
+mod.rf$finalModel
+# Use model to predict classe in testing set
+pred.rf <- predict(mod.rf, newdata=tes)
+
+cm.rf <- confusionMatrix(pred.rf, tes$classe)
+
+# Table of predicted vs. actual exercise classes
+cm.rf$table
+# Overall accuracy statistics
+round(cm.rf$overall, 3)
+```
+
+####__Analysis__
+The random forest algorithm provides a very accurate model with `r round(cm.rf$overall[[1]],3)*100`% out of sample accuracy. The only downside is that it is computationally inefficient and not easily interpretable.
+
+###__Method 3: Generalized Boosted Model__
+```{r boost, cache=TRUE}
+set.seed(333)
+system.time(mod.gbm <- train(x=tra[,-53], y=tra$classe, method="gbm",
+                trControl=trainControl(method="cv", number=5),
+                verbose=FALSE))
+```
+
+```{r boost2}
+mod.gbm$finalModel
+mod.gbm
+
+# Use model to predict classe in testing set
+pred.gbm <- predict(mod.gbm, newdata=tes[,-53], n.trees=150)
+cm.gbm <- confusionMatrix(pred.gbm, tes$classe)
+
+# Table of predicted vs. actual exercise classes
+cm.gbm$table
+# Overall accuracy statistics
+round(cm.gbm$overall, 3)
+```
+
+####__Analysis__
+Generalized boosting model gave a fairly good predictive model at `r round(cm.gbm$overall[[1]],3)*100`% out of sample accuracy. It was not quite as good as random forest, but it was much faster computationally.
+
+##__V. Model Selection and Testing Prediction__
+
+The three models had the following accuracy when used to predict on the testing set that was a subsample of the training set:
+      
+      1. Classification Tree: `r round(cm.ct$overall[[1]], 3)*100`%
+      2. Random Forest: `r round(cm.rf$overall[[1]],3)*100`%
+      3. Boosting: `r round(cm.gbm$overall[[1]],3)*100`%
+
+Random Forest will be used because it has the best accuracy, although boosting did a pretty good job as well. The following are the final predictions associated with their problem id numbers.
+
+```{r finalPredict}
+pred.final <- predict(mod.rf, myTest)
+answers <- data.frame(ProblemID=myTest$problem_id, Prediction=pred.final)
+answers
+```
+
+
+##Sources
+Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative Activity Recognition of Weight Lifting Exercises. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013.
+
+
+
+
+
+~~~
