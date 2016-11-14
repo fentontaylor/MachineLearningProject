@@ -26,6 +26,9 @@ In this particular study, as described on the author's website, "six young healt
 library(caret)
 library(rattle)
 library(corrplot)
+library(knitr)
+library(grid)
+library(gridExtra)
 ```
 
 ###__B. Download Files__
@@ -73,6 +76,7 @@ tes <- myTrain[-inTrain,]
 
 ##__III. Exploratory Analysis__
 The data needs to be checked to see if any further transformation is necessary before attempting to build models with it.
+
 ###__A. Basic__
 Dimensions of the training and testing set made from the training set:
 ```{r}
@@ -110,6 +114,7 @@ All models will use k-fold cross-validation with $k=5$.
 set.seed(111)
 system.time(mod.ct <- train(x=tra[,-53], y=tra$classe, method="rpart",
                 trControl=trainControl(method="cv", number=5)))
+saveRDS(mod.ct, file="modelCT.rds")
 ```
 
 ```{r ct2}
@@ -127,7 +132,7 @@ round(cm.ct$overall, 3)
 ```
 
 ####__Analysis__
-The simple classification tree with all the measurement variables as predictors obtains only `r round(cm.ct$overall[[1]],3)*100`% out of sample accuracy when applied to the testing set. That is quite poor predictive power, so other algorithms need to be explored.
+The simple classification tree with all the measurement variables as predictors obtains only `r round(cm.ct$overall[[1]],3)*100`%  out of sample accuracy (out of sample error rate = `r round(1-cm.ct$overall[[1]],3)*100`%) when applied to the testing set. That is quite poor predictive power, so other algorithms need to be explored.
 
 ###__Method 2: Random Forests__
 
@@ -135,10 +140,11 @@ The simple classification tree with all the measurement variables as predictors 
 set.seed(222)
 system.time(mod.rf <- train(x=tra[,-53], y=tra$classe, method="rf",
                 trControl=trainControl(method="cv", number=5)))
+saveRDS(mod.rf, file="modelRF.rds")
 ```
 
 ```{r rf2}
-mod.rf$finalModel
+mod.rf
 # Use model to predict classe in testing set
 pred.rf <- predict(mod.rf, newdata=tes)
 
@@ -151,7 +157,7 @@ round(cm.rf$overall, 3)
 ```
 
 ####__Analysis__
-The random forest algorithm provides a very accurate model with `r round(cm.rf$overall[[1]],3)*100`% out of sample accuracy. The only downside is that it is computationally inefficient and not easily interpretable.
+The random forest algorithm provides a very accurate model with `r round(cm.rf$overall[[1]],3)*100`% out of sample accuracy (out of sample error rate = `r round(1-cm.rf$overall[[1]],3)*100`%). The only downside is that it is computationally inefficient and not easily interpretable.
 
 ###__Method 3: Generalized Boosted Model__
 ```{r boost, cache=TRUE}
@@ -159,10 +165,10 @@ set.seed(333)
 system.time(mod.gbm <- train(x=tra[,-53], y=tra$classe, method="gbm",
                 trControl=trainControl(method="cv", number=5),
                 verbose=FALSE))
+saveRDS(mod.gbm, file="modelGBM.rds")
 ```
 
 ```{r boost2}
-mod.gbm$finalModel
 mod.gbm
 
 # Use model to predict classe in testing set
@@ -176,7 +182,63 @@ round(cm.gbm$overall, 3)
 ```
 
 ####__Analysis__
-Generalized boosting model gave a fairly good predictive model at `r round(cm.gbm$overall[[1]],3)*100`% out of sample accuracy. It was not quite as good as random forest, but it was much faster computationally.
+Generalized boosting model gave a fairly good predictive model at `r round(cm.gbm$overall[[1]],3)*100`% out of sample accuracy (out of sample error rate = `r round(1-cm.gbm$overall[[1]],3)*100`%). It was not quite as good as random forest, but it was much faster computationally.
+
+###__Variable Importance__
+One way to compare the models is to look at the relative importance of the variables.
+
+```{r varImp, fig.align="center", fig.height=11, fig.width=11}
+imp.ct <- varImp(mod.ct)[[1]]
+names.ct <- row.names(imp.ct)
+imp.ct <- data.frame(varName=names.ct,
+                     Overall=imp.ct, 
+                     Model = gl(1,k=length(imp.ct),labels="CT"),
+                     row.names = NULL)
+imp.ct <- imp.ct[order(imp.ct$Overall, decreasing = T),]
+imp.ct <- imp.ct[1:15,]
+imp.ct$varName <- factor(imp.ct$varName, levels = imp.ct$varName[order(imp.ct$Overall)])
+
+imp.rf <- varImp(mod.rf)[[1]]
+names.rf <- row.names(imp.rf)
+imp.rf <- data.frame(varName=names.rf, 
+                     Overall=imp.rf, 
+                     Model = gl(1,k=length(imp.rf),labels="RF"),
+                     row.names = NULL)
+imp.rf <- imp.rf[order(imp.rf$Overall, decreasing = T),]
+imp.rf <- imp.rf[1:15,]
+imp.rf$varName <- factor(imp.rf$varName, levels = imp.rf$varName[order(imp.rf$Overall)])
+
+imp.gbm <- varImp(mod.gbm)[[1]]
+names.gbm <- row.names(imp.gbm)
+imp.gbm <- data.frame(varName=names.gbm, 
+                     Overall=imp.gbm, 
+                     Model = gl(1,k=length(imp.gbm),labels="GBM"),
+                     row.names = NULL)
+imp.gbm <- imp.gbm[order(imp.gbm$Overall, decreasing = T),]
+imp.gbm <- imp.gbm[1:15,]
+imp.gbm$varName <- factor(imp.gbm$varName, levels = imp.gbm$varName[order(imp.gbm$Overall)])
+
+g <- ggplot(imp.gbm, aes(x=varName, y=Overall)) +
+      geom_bar(stat="identity", fill=alpha("blue", 0.7)) + 
+      labs(list(y="Overall Importance",x="Variable Name",title= "GBM Variable Importance")) +
+      theme_classic()+
+      coord_flip()
+h <- ggplot(imp.rf, aes(x=varName, y=Overall)) +
+      geom_bar(stat="identity", fill=alpha("red", 0.7)) + 
+      labs(list(y="Overall Importance",x="Variable Name",title= "RF Variable Importance")) +
+      theme_classic()+
+      coord_flip()
+j <- ggplot(imp.ct, aes(x=varName, y=Overall)) +
+      geom_bar(stat="identity", fill=alpha("green", 0.5)) + 
+      labs(list(y="Overall Importance",x="Variable Name",title= "CT Variable Importance")) +
+      theme_classic()+
+      coord_flip()
+grid.arrange(h,g,j, ncol=2)
+```
+
+####__Analysis__
+The RF and GBM models use mostly the same variables as important predictors. The first four variables, `r imp.rf$varName[1:4]`, are identical for both models. They share `r length(intersect(imp.rf$varName[1:10],imp.gbm$varName[1:10]))` of the top 10 and `r length(intersect(imp.rf$varName,imp.gbm$varName))` of the top 15 most important variables. The CT model found "roll_belt" to be only the third most important variable, whereas RF and GBM found it to be most important, with GBM heavily emphasizing its importance in relation to the other variables.
+
 
 ##__V. Model Selection and Testing Prediction__
 
@@ -190,9 +252,21 @@ Random Forest will be used because it has the best accuracy, although boosting d
 
 ```{r finalPredict}
 pred.final <- predict(mod.rf, myTest)
-answers <- data.frame(ProblemID=myTest$problem_id, Prediction=pred.final)
-answers
+pred.final.ct <- predict(mod.ct, myTest)
+pred.final.gbm <- predict(mod.gbm, myTest)
+# After submitting the predictions in the quiz, random forest had 100% accuracy
+answers <- data.frame(ProblemID=myTest$problem_id, 
+                      Actual=pred.final,
+                      rfPrediction=pred.final,
+                      rfCheck= pred.final==pred.final,
+                      gbmPrediction=pred.final.gbm,
+                      gbmCheck=pred.final.gbm==pred.final,
+                      ctPrediction=pred.final.ct,
+                      ctCheck=pred.final.ct==pred.final)
+kable(answers, align=rep('c', ncol(answers)))
 ```
+
+
 
 
 ##Sources

@@ -18,6 +18,9 @@ In this particular study, as described on the author's website, "six young healt
 library(caret)
 library(rattle)
 library(corrplot)
+library(knitr)
+library(grid)
+library(gridExtra)
 ```
 
 ###__B. Download Files__
@@ -67,6 +70,7 @@ tes <- myTrain[-inTrain,]
 
 ##__III. Exploratory Analysis__
 The data needs to be checked to see if any further transformation is necessary before attempting to build models with it.
+
 ###__A. Basic__
 Dimensions of the training and testing set made from the training set:
 
@@ -133,7 +137,11 @@ system.time(mod.ct <- train(x=tra[,-53], y=tra$classe, method="rpart",
 
 ```
 ##    user  system elapsed 
-##    6.72    0.14    6.88
+##    6.34    0.13    6.52
+```
+
+```r
+saveRDS(mod.ct, file="modelCT.rds")
 ```
 
 
@@ -148,14 +156,16 @@ mod.ct$finalModel
 ##       * denotes terminal node
 ## 
 ##  1) root 11776 8428 A (0.28 0.19 0.17 0.16 0.18)  
-##    2) roll_belt< 130.5 10792 7451 A (0.31 0.21 0.19 0.18 0.11)  
-##      4) pitch_forearm< -26.75 1075   43 A (0.96 0.04 0 0 0) *
-##      5) pitch_forearm>=-26.75 9717 7408 A (0.24 0.23 0.21 0.2 0.12)  
-##       10) magnet_dumbbell_y< 437.5 8175 5921 A (0.28 0.18 0.24 0.19 0.11)  
-##         20) roll_forearm< 119.5 4977 2961 A (0.41 0.17 0.2 0.17 0.059) *
-##         21) roll_forearm>=119.5 3198 2182 C (0.074 0.19 0.32 0.24 0.18) *
-##       11) magnet_dumbbell_y>=437.5 1542  773 B (0.036 0.5 0.043 0.22 0.2) *
-##    3) roll_belt>=130.5 984    7 E (0.0071 0 0 0 0.99) *
+##    2) roll_belt< 130.5 10793 7452 A (0.31 0.21 0.19 0.18 0.11)  
+##      4) pitch_forearm< -33.15 964   12 A (0.99 0.012 0 0 0) *
+##      5) pitch_forearm>=-33.15 9829 7440 A (0.24 0.23 0.21 0.2 0.12)  
+##       10) yaw_belt>=169.5 502   55 A (0.89 0.052 0 0.052 0.006) *
+##       11) yaw_belt< 169.5 9327 7086 B (0.21 0.24 0.22 0.2 0.13)  
+##         22) magnet_dumbbell_y< 436.5 7778 5789 C (0.24 0.19 0.26 0.2 0.11)  
+##           44) magnet_dumbbell_z< -30.5 2338 1258 A (0.46 0.24 0.11 0.13 0.058) *
+##           45) magnet_dumbbell_z>=-30.5 5440 3713 C (0.15 0.17 0.32 0.23 0.14) *
+##         23) magnet_dumbbell_y>=436.5 1549  768 B (0.038 0.5 0.042 0.23 0.19) *
+##    3) roll_belt>=130.5 983    7 E (0.0071 0 0 0 0.99) *
 ```
 
 ```r
@@ -177,11 +187,11 @@ cm.ct$table
 ```
 ##           Reference
 ## Prediction    A    B    C    D    E
-##          A 2028  658  610  570  225
-##          B   31  507   42  237  183
-##          C  166  353  716  479  380
+##          A 1667  360  171  223   91
+##          B   40  527   42  232  200
+##          C  520  631 1155  831  515
 ##          D    0    0    0    0    0
-##          E    7    0    0    0  654
+##          E    5    0    0    0  636
 ```
 
 ```r
@@ -191,13 +201,13 @@ round(cm.ct$overall, 3)
 
 ```
 ##       Accuracy          Kappa  AccuracyLower  AccuracyUpper   AccuracyNull 
-##          0.498          0.343          0.487          0.509          0.284 
+##          0.508          0.375          0.497          0.519          0.284 
 ## AccuracyPValue  McnemarPValue 
 ##          0.000            NaN
 ```
 
 ####__Analysis__
-The simple classification tree with all the measurement variables as predictors obtains only 49.8% out of sample accuracy when applied to the testing set. That is quite poor predictive power, so other algorithms need to be explored.
+The simple classification tree with all the measurement variables as predictors obtains only 50.8%  out of sample accuracy (out of sample error rate = 49.2%) when applied to the testing set. That is quite poor predictive power, so other algorithms need to be explored.
 
 ###__Method 2: Random Forests__
 
@@ -210,30 +220,37 @@ system.time(mod.rf <- train(x=tra[,-53], y=tra$classe, method="rf",
 
 ```
 ##    user  system elapsed 
-##  632.19    3.30  639.03
+##  590.66    3.55  595.47
+```
+
+```r
+saveRDS(mod.rf, file="modelRF.rds")
 ```
 
 
 ```r
-mod.rf$finalModel
+mod.rf
 ```
 
 ```
+## Random Forest 
 ## 
-## Call:
-##  randomForest(x = x, y = y, mtry = param$mtry) 
-##                Type of random forest: classification
-##                      Number of trees: 500
-## No. of variables tried at each split: 27
+## 11776 samples
+##    52 predictor
+##     5 classes: 'A', 'B', 'C', 'D', 'E' 
 ## 
-##         OOB estimate of  error rate: 0.78%
-## Confusion matrix:
-##      A    B    C    D    E class.error
-## A 3344    3    0    0    1 0.001194743
-## B   18 2256    5    0    0 0.010092146
-## C    0   12 2034    8    0 0.009737098
-## D    0    0   28 1900    2 0.015544041
-## E    0    3    6    6 2150 0.006928406
+## No pre-processing
+## Resampling: Cross-Validated (5 fold) 
+## Summary of sample sizes: 9421, 9421, 9421, 9421, 9420 
+## Resampling results across tuning parameters:
+## 
+##   mtry  Accuracy   Kappa    
+##    2    0.9887906  0.9858187
+##   27    0.9886205  0.9856042
+##   52    0.9836101  0.9792652
+## 
+## Accuracy was used to select the optimal model using  the largest value.
+## The final value used for the model was mtry = 2.
 ```
 
 ```r
@@ -250,10 +267,10 @@ cm.rf$table
 ##           Reference
 ## Prediction    A    B    C    D    E
 ##          A 2232    5    0    0    0
-##          B    0 1509    1    1    2
-##          C    0    4 1367    5    0
-##          D    0    0    0 1280    4
-##          E    0    0    0    0 1436
+##          B    0 1513    7    0    0
+##          C    0    0 1360   10    0
+##          D    0    0    1 1275    2
+##          E    0    0    0    1 1440
 ```
 
 ```r
@@ -263,13 +280,13 @@ round(cm.rf$overall, 3)
 
 ```
 ##       Accuracy          Kappa  AccuracyLower  AccuracyUpper   AccuracyNull 
-##          0.997          0.996          0.996          0.998          0.284 
+##          0.997          0.996          0.995          0.998          0.284 
 ## AccuracyPValue  McnemarPValue 
 ##          0.000            NaN
 ```
 
 ####__Analysis__
-The random forest algorithm provides a very accurate model with 99.7% out of sample accuracy. The only downside is that it is computationally inefficient and not easily interpretable.
+The random forest algorithm provides a very accurate model with 99.7% out of sample accuracy (out of sample error rate = 0.3%). The only downside is that it is computationally inefficient and not easily interpretable.
 
 ###__Method 3: Generalized Boosted Model__
 
@@ -282,19 +299,13 @@ system.time(mod.gbm <- train(x=tra[,-53], y=tra$classe, method="gbm",
 
 ```
 ##    user  system elapsed 
-##  260.88    0.41  261.81
+##  259.18    0.28  259.90
 ```
-
 
 ```r
-mod.gbm$finalModel
+saveRDS(mod.gbm, file="modelGBM.rds")
 ```
 
-```
-## A gradient boosted model with multinomial loss function.
-## 150 iterations were performed.
-## There were 52 predictors of which 42 had non-zero influence.
-```
 
 ```r
 mod.gbm
@@ -313,15 +324,15 @@ mod.gbm
 ## Resampling results across tuning parameters:
 ## 
 ##   interaction.depth  n.trees  Accuracy   Kappa    
-##   1                   50      0.7509337  0.6842316
-##   1                  100      0.8209056  0.7732033
-##   1                  150      0.8528361  0.8137474
-##   2                   50      0.8559790  0.8174687
-##   2                  100      0.9090517  0.8849060
-##   2                  150      0.9329144  0.9150935
-##   3                   50      0.8967397  0.8692777
-##   3                  100      0.9426799  0.9274587
-##   3                  150      0.9601734  0.9496114
+##   1                   50      0.7506803  0.6837357
+##   1                  100      0.8165767  0.7677470
+##   1                  150      0.8532623  0.8142470
+##   2                   50      0.8552147  0.8165511
+##   2                  100      0.9088830  0.8846818
+##   2                  150      0.9337635  0.9161952
+##   3                   50      0.8961439  0.8685029
+##   3                  100      0.9425101  0.9272611
+##   3                  150      0.9614466  0.9512300
 ## 
 ## Tuning parameter 'shrinkage' was held constant at a value of 0.1
 ## 
@@ -343,11 +354,11 @@ cm.gbm$table
 ```
 ##           Reference
 ## Prediction    A    B    C    D    E
-##          A 2208   48    0    1    0
-##          B   19 1433   29    5   13
-##          C    3   36 1326   34   13
-##          D    2    0   11 1242   18
-##          E    0    1    2    4 1398
+##          A 2189   31    0    0    2
+##          B   30 1454   34    0   19
+##          C    7   32 1319   33   19
+##          D    2    1   13 1249   14
+##          E    4    0    2    4 1388
 ```
 
 ```r
@@ -357,54 +368,126 @@ round(cm.gbm$overall, 3)
 
 ```
 ##       Accuracy          Kappa  AccuracyLower  AccuracyUpper   AccuracyNull 
-##          0.970          0.961          0.965          0.973          0.284 
+##          0.969          0.960          0.964          0.972          0.284 
 ## AccuracyPValue  McnemarPValue 
-##          0.000            NaN
+##          0.000          0.000
 ```
 
 ####__Analysis__
-Generalized boosting model gave a fairly good predictive model at 97% out of sample accuracy. It was not quite as good as random forest, but it was much faster computationally.
+Generalized boosting model gave a fairly good predictive model at 96.9% out of sample accuracy (out of sample error rate = 3.1%). It was not quite as good as random forest, but it was much faster computationally.
+
+###__Variable Importance__
+One way to compare the models is to look at the relative importance of the variables.
+
+
+```r
+imp.ct <- varImp(mod.ct)[[1]]
+names.ct <- row.names(imp.ct)
+imp.ct <- data.frame(varName=names.ct,
+                     Overall=imp.ct, 
+                     Model = gl(1,k=length(imp.ct),labels="CT"),
+                     row.names = NULL)
+imp.ct <- imp.ct[order(imp.ct$Overall, decreasing = T),]
+imp.ct <- imp.ct[1:15,]
+imp.ct$varName <- factor(imp.ct$varName, levels = imp.ct$varName[order(imp.ct$Overall)])
+
+imp.rf <- varImp(mod.rf)[[1]]
+names.rf <- row.names(imp.rf)
+imp.rf <- data.frame(varName=names.rf, 
+                     Overall=imp.rf, 
+                     Model = gl(1,k=length(imp.rf),labels="RF"),
+                     row.names = NULL)
+imp.rf <- imp.rf[order(imp.rf$Overall, decreasing = T),]
+imp.rf <- imp.rf[1:15,]
+imp.rf$varName <- factor(imp.rf$varName, levels = imp.rf$varName[order(imp.rf$Overall)])
+
+imp.gbm <- varImp(mod.gbm)[[1]]
+names.gbm <- row.names(imp.gbm)
+imp.gbm <- data.frame(varName=names.gbm, 
+                     Overall=imp.gbm, 
+                     Model = gl(1,k=length(imp.gbm),labels="GBM"),
+                     row.names = NULL)
+imp.gbm <- imp.gbm[order(imp.gbm$Overall, decreasing = T),]
+imp.gbm <- imp.gbm[1:15,]
+imp.gbm$varName <- factor(imp.gbm$varName, levels = imp.gbm$varName[order(imp.gbm$Overall)])
+
+g <- ggplot(imp.gbm, aes(x=varName, y=Overall)) +
+      geom_bar(stat="identity", fill=alpha("blue", 0.7)) + 
+      labs(list(y="Overall Importance",x="Variable Name",title= "GBM Variable Importance")) +
+      theme_classic()+
+      coord_flip()
+h <- ggplot(imp.rf, aes(x=varName, y=Overall)) +
+      geom_bar(stat="identity", fill=alpha("red", 0.7)) + 
+      labs(list(y="Overall Importance",x="Variable Name",title= "RF Variable Importance")) +
+      theme_classic()+
+      coord_flip()
+j <- ggplot(imp.ct, aes(x=varName, y=Overall)) +
+      geom_bar(stat="identity", fill=alpha("green", 0.5)) + 
+      labs(list(y="Overall Importance",x="Variable Name",title= "CT Variable Importance")) +
+      theme_classic()+
+      coord_flip()
+grid.arrange(h,g,j, ncol=2)
+```
+
+<img src="index_files/figure-html/varImp-1.png" style="display: block; margin: auto;" />
+
+####__Analysis__
+The RF and GBM models use mostly the same variables as important predictors. The first four variables, roll_belt, yaw_belt, magnet_dumbbell_z, magnet_dumbbell_y, are identical for both models. They share 8 of the top 10 and 11 of the top 15 most important variables. The CT model found "roll_belt" to be only the third most important variable, whereas RF and GBM found it to be most important, with GBM heavily emphasizing its importance in relation to the other variables.
+
 
 ##__V. Model Selection and Testing Prediction__
 
 The three models had the following accuracy when used to predict on the testing set that was a subsample of the training set:
       
-      1. Classification Tree: 49.8%
+      1. Classification Tree: 50.8%
       2. Random Forest: 99.7%
-      3. Boosting: 97%
+      3. Boosting: 96.9%
 
 Random Forest will be used because it has the best accuracy, although boosting did a pretty good job as well. The following are the final predictions associated with their problem id numbers.
 
 
 ```r
 pred.final <- predict(mod.rf, myTest)
-answers <- data.frame(ProblemID=myTest$problem_id, Prediction=pred.final)
-answers
+pred.final.ct <- predict(mod.ct, myTest)
+pred.final.gbm <- predict(mod.gbm, myTest)
+# After submitting the predictions in the quiz, random forest had 100% accuracy
+answers <- data.frame(ProblemID=myTest$problem_id, 
+                      Actual=pred.final,
+                      rfPrediction=pred.final,
+                      rfCheck= pred.final==pred.final,
+                      gbmPrediction=pred.final.gbm,
+                      gbmCheck=pred.final.gbm==pred.final,
+                      ctPrediction=pred.final.ct,
+                      ctCheck=pred.final.ct==pred.final)
+kable(answers, align=rep('c', ncol(answers)))
 ```
 
-```
-##    ProblemID Prediction
-## 1          1          B
-## 2          2          A
-## 3          3          B
-## 4          4          A
-## 5          5          A
-## 6          6          E
-## 7          7          D
-## 8          8          B
-## 9          9          A
-## 10        10          A
-## 11        11          B
-## 12        12          C
-## 13        13          B
-## 14        14          A
-## 15        15          E
-## 16        16          E
-## 17        17          A
-## 18        18          B
-## 19        19          B
-## 20        20          B
-```
+
+
+ ProblemID    Actual    rfPrediction    rfCheck    gbmPrediction    gbmCheck    ctPrediction    ctCheck 
+-----------  --------  --------------  ---------  ---------------  ----------  --------------  ---------
+     1          B            B           TRUE            B            TRUE           A           FALSE  
+     2          A            A           TRUE            A            TRUE           A           TRUE   
+     3          B            B           TRUE            B            TRUE           C           FALSE  
+     4          A            A           TRUE            A            TRUE           C           FALSE  
+     5          A            A           TRUE            A            TRUE           C           FALSE  
+     6          E            E           TRUE            E            TRUE           C           FALSE  
+     7          D            D           TRUE            D            TRUE           C           FALSE  
+     8          B            B           TRUE            B            TRUE           C           FALSE  
+     9          A            A           TRUE            A            TRUE           A           TRUE   
+    10          A            A           TRUE            A            TRUE           A           TRUE   
+    11          B            B           TRUE            B            TRUE           C           FALSE  
+    12          C            C           TRUE            C            TRUE           C           TRUE   
+    13          B            B           TRUE            B            TRUE           C           FALSE  
+    14          A            A           TRUE            A            TRUE           A           TRUE   
+    15          E            E           TRUE            E            TRUE           C           FALSE  
+    16          E            E           TRUE            E            TRUE           C           FALSE  
+    17          A            A           TRUE            A            TRUE           C           FALSE  
+    18          B            B           TRUE            B            TRUE           A           FALSE  
+    19          B            B           TRUE            B            TRUE           A           FALSE  
+    20          B            B           TRUE            B            TRUE           C           FALSE  
+
+
 
 
 ##Sources
